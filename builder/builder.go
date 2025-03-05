@@ -145,11 +145,6 @@ func (b *Builder) Run(ctx context.Context, ui packer.Ui, hook packer.Hook) (pack
 			&StepResizeQemuImage{},
 			&StepExpandPartition{ResultKey: "resized_partition_index"},
 			&StepMapImage{ResultKey: "image_loop_device"},
-			// Add the new step to ensure the partition device exists.
-			&StepEnsureLoopPartitionExists{
-				LoopDeviceKey:  "image_loop_device",
-				PartitionKey:   "resized_partition_index",
-			},
 			&StepResizePartitionFs{FromKey: "image_loop_device", SelectedPartitionKey: "resized_partition_index"},
 			&StepMountImage{FromKey: "image_loop_device", ResultKey: "image_mountpoint", MountPath: b.config.ImageMountPath},
 		)	

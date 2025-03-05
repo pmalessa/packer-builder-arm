@@ -1,3 +1,4 @@
+// step_map_image.go
 package builder
 
 import (
@@ -10,43 +11,56 @@ import (
 	"github.com/hashicorp/packer-plugin-sdk/packer"
 )
 
-// StepMapImage maps system image to /dev/loopX
+// StepMapImage maps a system image to a free loop device and creates partition mappings via kpartx.
 type StepMapImage struct {
 	ResultKey  string
 	loopDevice string
 }
 
-// Run the step
-func (s *StepMapImage) Run(_ context.Context, state multistep.StateBag) multistep.StepAction {
+// Run the step.
+func (s *StepMapImage) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {
 	config := state.Get("config").(*Config)
 	ui := state.Get("ui").(packer.Ui)
 	image := config.ImageConfig.ImagePath
 
-	// ask losetup to find empty device and map image
-	ui.Message(fmt.Sprintf("mapping image %s to free loopback device", image))
+	ui.Message(fmt.Sprintf("Mapping image %s to free loopback device with partition mapping", image))
 
-	out, err := exec.Command("losetup", "--find", "--partscan", "--show", image).CombinedOutput()
-
+	// Map the image using losetup with partition scanning enabled.
+	out, err := exec.Command("losetup", "--find", "--show", "--partscan", image).CombinedOutput()
 	if err != nil {
-		ui.Error(fmt.Sprintf("error losetup --find --partscan %v: %s", err, string(out)))
+		ui.Error(fmt.Sprintf("Error running losetup: %v: %s", err, string(out)))
 		return multistep.ActionHalt
 	}
-	s.loopDevice = strings.Trim(string(out), "\n")
+	s.loopDevice = strings.TrimSpace(string(out))
+	ui.Message(fmt.Sprintf("Image %s mapped to %s", image, s.loopDevice))
 
+	// Use kpartx to create device-mapper entries for the partitions.
+	out, err = exec.Command("kpartx", "-av", s.loopDevice).CombinedOutput()
+	if err != nil {
+		ui.Error(fmt.Sprintf("Error running kpartx: %v: %s", err, string(out)))
+		return multistep.ActionHalt
+	}
+	ui.Message(fmt.Sprintf("kpartx mapping output:\n%s", string(out)))
+
+	// Store the loop device in state for later steps.
 	state.Put(s.ResultKey, s.loopDevice)
-	ui.Message(fmt.Sprintf("image %s mapped to %s", image, s.loopDevice))
-
 	return multistep.ActionContinue
 }
 
-// Cleanup after step execution
+// Cleanup removes kpartx mappings and detaches the loop device.
 func (s *StepMapImage) Cleanup(state multistep.StateBag) {
 	ui := state.Get("ui").(packer.Ui)
-
-	// Warning: Busy device will prevent detaching loop device from file
-	// https://github.com/util-linux/util-linux/issues/484
-	out, err := exec.Command("losetup", "--detach", s.loopDevice).CombinedOutput()
+	if s.loopDevice == "" {
+		return
+	}
+	// Remove kpartx mappings.
+	out, err := exec.Command("kpartx", "-d", s.loopDevice).CombinedOutput()
 	if err != nil {
-		ui.Error(fmt.Sprintf("error while unmounting loop device %v: %s", err, string(out)))
+		ui.Error(fmt.Sprintf("Error cleaning up kpartx mappings for %s: %v: %s", s.loopDevice, err, string(out)))
+	}
+	// Detach the loop device.
+	out, err = exec.Command("losetup", "--detach", s.loopDevice).CombinedOutput()
+	if err != nil {
+		ui.Error(fmt.Sprintf("Error detaching loop device %s: %v: %s", s.loopDevice, err, string(out)))
 	}
 }
