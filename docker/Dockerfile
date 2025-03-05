@@ -2,8 +2,8 @@
 FROM public.ecr.aws/ubuntu/ubuntu:lunar as qemu_binaries
 
 # hadolint ignore=DL3008
-RUN apt update -qq \
- && apt install -qqy --no-install-recommends qemu-user-static
+RUN apt update \
+ && apt install -y --no-install-recommends qemu-user-static
 
 RUN mkdir -p /binaries && \
     if [ "$(uname -m)" = "aarch64" ]; then \
@@ -17,8 +17,8 @@ RUN mkdir -p /binaries && \
 FROM golang:1.21-bullseye AS builder
 
 # hadolint ignore=DL3008
-RUN apt update -qq \
- && apt install -qqy --no-install-recommends \
+RUN apt update \
+ && apt install -y --no-install-recommends \
   ca-certificates \
   git \
   unzip \
@@ -46,8 +46,8 @@ RUN upx-ucl --lzma /build/packer-builder-arm /bin/packer
 FROM public.ecr.aws/lts/ubuntu:jammy
 
 # hadolint ignore=DL3008
-RUN apt update -qq \
- && apt install -qqy --no-install-recommends \
+RUN apt update \
+ && apt install -y --no-install-recommends \
   ca-certificates \
   dosfstools \
   fdisk \
