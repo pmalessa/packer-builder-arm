@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
-	"strings"
 
 	"github.com/hashicorp/packer-plugin-sdk/multistep"
 	"github.com/hashicorp/packer-plugin-sdk/packer"
@@ -21,15 +20,12 @@ type StepResizePartitionFs struct {
 func (s *StepResizePartitionFs) Run(ctx context.Context, state multistep.StateBag) multistep.StepAction {
 	ui := state.Get("ui").(packer.Ui)
 
+	// Now loopDevice is already a device-mapper path, e.g. "/dev/mapper/loop0"
 	loopDevice := state.Get(s.FromKey).(string)
 	selectedPartition := state.Get(s.SelectedPartitionKey).(int)
 
-	// Extract the basename from the loop device (e.g., "loop0" from "/dev/loop0")
-	parts := strings.Split(loopDevice, "/")
-	base := parts[len(parts)-1]
-
-	// Construct the partition device as /dev/mapper/loop0p<partition>
-	device := fmt.Sprintf("/dev/mapper/%sp%d", base, selectedPartition)
+	// Construct the partition device by appending "p<partition>"
+	device := fmt.Sprintf("%sp%d", loopDevice, selectedPartition)
 	ui.Message(fmt.Sprintf("Running resize2fs on partition device %s", device))
 
 	out, err := exec.Command("resize2fs", "-f", device).CombinedOutput()
@@ -40,6 +36,7 @@ func (s *StepResizePartitionFs) Run(ctx context.Context, state multistep.StateBa
 
 	return multistep.ActionContinue
 }
+
 
 // Cleanup after step execution (no cleanup needed here).
 func (s *StepResizePartitionFs) Cleanup(state multistep.StateBag) {}

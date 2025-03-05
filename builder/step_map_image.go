@@ -42,10 +42,16 @@ func (s *StepMapImage) Run(ctx context.Context, state multistep.StateBag) multis
 	}
 	ui.Message(fmt.Sprintf("kpartx mapping output:\n%s", string(out)))
 
-	// Store the loop device in state for later steps.
-	state.Put(s.ResultKey, s.loopDevice)
+	// Convert the loop device to the device-mapper path.
+	// For example, if s.loopDevice is "/dev/loop0", mappedDevice becomes "/dev/mapper/loop0"
+	mappedDevice := "/dev/mapper/" + strings.TrimPrefix(s.loopDevice, "/dev/")
+	ui.Message(fmt.Sprintf("Returning mapped device: %s", mappedDevice))
+
+	// Store the mapped device in state for later steps.
+	state.Put(s.ResultKey, mappedDevice)
 	return multistep.ActionContinue
 }
+
 
 // Cleanup removes kpartx mappings and detaches the loop device.
 func (s *StepMapImage) Cleanup(state multistep.StateBag) {
